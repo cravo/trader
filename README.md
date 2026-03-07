@@ -32,4 +32,5 @@ docker compose up -d trader-web
 docker compose run --rm trader-scan
 
 crontab -e
+10 8 * * 1-5 cd ~/trader && docker compose run --rm trader-scan >> /var/log/trader-scan.log 2>&1
 
