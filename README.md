@@ -27,10 +27,15 @@ A small Python app to recommend swing trades, based on a one-week time horizon a
 
 ```bash
 cp .env.example .env
+python3 venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python3 scripts/update_universe.py >> /var/log/trader-universe.log 2>&1
 docker compose build
 docker compose up -d trader-web
 docker compose run --rm trader-scan
 
 crontab -e
 10 8 * * 1-5 cd ~/trader && docker compose run --rm trader-scan >> /var/log/trader-scan.log 2>&1
+0 6 * * 1 cd ~/trader && python3 scripts/update_universe.py >> /var/log/trader-universe.log 2>&1
 
