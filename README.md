@@ -1,13 +1,9 @@
 # Trader
 
-A small Python app that:
+A small Python app to recommend swing trades, based on a one-week time horizon and 5% gain:
 
 - downloads market data from Yahoo Finance
-- scores candidates using:
-  - 5-day return
-  - relative strength vs market benchmark
-  - volume ratio vs prior 30-day average
-  - breakout above recent highs
+- scores candidates using various metrics
 - applies market regime and trend filters
 - either:
   - selects one stock for the day/week
@@ -27,19 +23,13 @@ A small Python app that:
 - UK stocks are compared against `^FTSE`
 - US stocks are compared against `^GSPC`
 
-## Extra improvement in this version
-
-This version adds a simple trend filter:
-
-- latest close must be above slow MA
-- fast MA must be above slow MA
-
-By default:
-
-- fast MA = 20 days
-- slow MA = 50 days
-
 ## Setup
 
 ```bash
 cp .env.example .env
+docker compose build
+docker compose up -d trader-web
+docker compose run --rm trader-scan
+
+crontab -e
+
