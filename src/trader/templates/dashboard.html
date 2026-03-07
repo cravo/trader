@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Trader Dashboard</title>
+    <style>
+        :root {
+            --bg: #0b1220;
+            --panel: #121a2b;
+            --panel-2: #182235;
+            --border: #24324a;
+            --text: #eef2ff;
+            --muted: #98a2b3;
+            --good: #22c55e;
+            --bad: #ef4444;
+            --warn: #f59e0b;
+            --accent: #60a5fa;
+            --shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+            --radius: 18px;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Inter, Arial, sans-serif;
+            background: linear-gradient(180deg, #09101d 0%, #0b1220 100%);
+            color: var(--text);
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+
+        h1, h2, h3 {
+            margin: 0 0 12px 0;
+        }
+
+        .muted {
+            color: var(--muted);
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: end;
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .header h1 {
+            font-size: 34px;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            border-radius: 999px;
+            padding: 8px 14px;
+            font-size: 13px;
+            font-weight: 700;
+            border: 1px solid transparent;
+        }
+
+        .badge.good {
+            background: rgba(34, 197, 94, 0.12);
+            color: #86efac;
+            border-color: rgba(34, 197, 94, 0.28);
+        }
+
+        .badge.bad {
+            background: rgba(239, 68, 68, 0.12);
+            color: #fca5a5;
+            border-color: rgba(239, 68, 68, 0.28);
+        }
+
+        .badge.warn {
+            background: rgba(245, 158, 11, 0.12);
+            color: #fcd34d;
+            border-color: rgba(245, 158, 11, 0.28);
+        }
+
+        .hero {
+            display: grid;
+            grid-template-columns: 1.4fr 1fr;
+            gap: 18px;
+            margin-bottom: 18px;
+        }
+
+        .card {
+            background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 20px;
+            box-shadow: var(--shadow);
+        }
+
+        .regime-card {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .regime-card::after {
+            content: "";
+            position: absolute;
+            inset: auto -80px -80px auto;
+            width: 220px;
+            height: 220px;
+            border-radius: 999px;
+            background: radial-gradient(circle, rgba(96,165,250,0.18), transparent 70%);
+            pointer-events: none;
+        }
+
+        .regime-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            gap: 16px;
+            margin-bottom: 18px;
+        }
+
+        .regime-title {
+            font-size: 15px;
+            color: var(--muted);
+            margin-bottom: 6px;
+        }
+
+        .regime-value {
+            font-size: 38px;
+            line-height: 1;
+            font-weight: 800;
+            letter-spacing: -0.03em;
+            margin-bottom: 8px;
+        }
+
+        .regime-sub {
+            color: var(--muted);
+            font-size: 14px;
+        }
+
+        .metrics {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+        }
+
+        .metric {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.05);
+            border-radius: 14px;
+            padding: 14px;
+        }
+
+        .metric-label {
+            font-size: 12px;
+            color: var(--muted);
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+
+        .metric-value {
+            font-size: 22px;
+            font-weight: 800;
+        }
+
+        .decision-card h2 {
+            margin-bottom: 16px;
+        }
+
+        .winner-box {
+            margin-top: 16px;
+            padding: 16px;
+            border-radius: 14px;
+            background: rgba(96, 165, 250, 0.08);
+            border: 1px solid rgba(96, 165, 250, 0.22);
+        }
+
+        .winner-ticker {
+            font-size: 26px;
+            font-weight: 800;
+            margin-bottom: 6px;
+        }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 18px;
+            margin-bottom: 18px;
+        }
+
+        .summary-card .big {
+            font-size: 28px;
+            font-weight: 800;
+            margin-top: 8px;
+        }
+
+        .top-cards {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 18px;
+            margin-bottom: 22px;
+        }
+
+        .candidate-card {
+            position: relative;
+            padding-top: 18px;
+        }
+
+        .rank-pill {
+            position: absolute;
+            top: 14px;
+            right: 14px;
+            min-width: 34px;
+            text-align: center;
+            padding: 6px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 800;
+            background: rgba(255,255,255,0.07);
+            color: var(--text);
+        }
+
+        .candidate-ticker {
+            font-size: 24px;
+            font-weight: 800;
+            margin-bottom: 4px;
+        }
+
+        .candidate-name {
+            font-size: 14px;
+            color: var(--muted);
+            min-height: 38px;
+            margin-bottom: 14px;
+        }
+
+        .mini-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .mini {
+            background: rgba(255,255,255,0.03);
+            border-radius: 12px;
+            padding: 10px;
+        }
+
+        .mini .label {
+            font-size: 11px;
+            color: var(--muted);
+            margin-bottom: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .mini .value {
+            font-size: 16px;
+            font-weight: 700;
+        }
+
+        .tables {
+            display: grid;
+            grid-template-columns: 1.25fr 1fr;
+            gap: 18px;
+        }
+
+        .table-card {
+            overflow: hidden;
+            padding: 0;
+        }
+
+        .table-header {
+            padding: 18px 20px 12px 20px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            text-align: left;
+            padding: 12px 14px;
+            border-top: 1px solid var(--border);
+            font-size: 14px;
+            vertical-align: middle;
+        }
+
+        th {
+            color: var(--muted);
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            background: rgba(255,255,255,0.02);
+        }
+
+        tr:hover td {
+            background: rgba(255,255,255,0.02);
+        }
+
+        .pill {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .pill.good {
+            background: rgba(34, 197, 94, 0.14);
+            color: #86efac;
+        }
+
+        .pill.bad {
+            background: rgba(239, 68, 68, 0.14);
+            color: #fca5a5;
+        }
+
+        .pill.neutral {
+            background: rgba(255,255,255,0.08);
+            color: #dbeafe;
+        }
+
+        @media (max-width: 1200px) {
+            .top-cards {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .summary-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .tables,
+            .hero {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 700px) {
+            .metrics,
+            .summary-grid,
+            .top-cards {
+                grid-template-columns: 1fr;
+            }
+
+            .header {
+                flex-direction: column;
+                align-items: start;
+            }
+
+            .regime-value {
+                font-size: 30px;
+            }
+
+            .container {
+                padding: 16px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        {% if data.run %}
+            <div class="header">
+                <div>
+                    <h1>Trader Dashboard</h1>
+                    <div class="muted">Last scan: {{ data.run.run_at_utc }}</div>
+                </div>
+
+                {% if data.run.regime_bullish %}
+                    <span class="badge good">Market regime bullish</span>
+                {% else %}
+                    <span class="badge bad">Market regime bearish</span>
+                {% endif %}
+            </div>
+
+            <div class="hero">
+                <div class="card regime-card">
+                    <div class="regime-top">
+                        <div>
+                            <div class="regime-title">Market Regime</div>
+                            <div class="regime-value">
+                                {{ data.run.regime_ticker }}
+                            </div>
+                            <div class="regime-sub">
+                                Compared with {{ data.run.regime_ma_days }}-day moving average
+                            </div>
+                        </div>
+
+                        {% if data.run.regime_bullish %}
+                            <span class="badge good">Risk-on</span>
+                        {% else %}
+                            <span class="badge bad">Stand down</span>
+                        {% endif %}
+                    </div>
+
+                    <div class="metrics">
+                        <div class="metric">
+                            <div class="metric-label">Latest</div>
+                            <div class="metric-value">{{ "%.2f"|format(data.run.regime_latest or 0) }}</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-label">Moving Avg</div>
+                            <div class="metric-value">{{ "%.2f"|format(data.run.regime_ma or 0) }}</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-label">Delta</div>
+                            <div class="metric-value">
+                                {{ "%.2f"|format((data.run.regime_latest or 0) - (data.run.regime_ma or 0)) }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card decision-card">
+                    <h2>Current Decision</h2>
+
+                    {% if data.run.should_trade %}
+                        <span class="badge good">Trade allowed</span>
+                    {% else %}
+                        <span class="badge bad">No trade</span>
+                    {% endif %}
+
+                    <p class="muted" style="margin-top: 14px;">{{ data.run.decision_reason }}</p>
+
+                    {% if data.run.winner_ticker %}
+                        <div class="winner-box">
+                            <div class="winner-ticker">{{ data.run.winner_ticker }}</div>
+                            <div style="font-weight: 600; margin-bottom: 6px;">{{ data.run.winner_name }}</div>
+                            <div class="muted" style="margin-bottom: 12px;">{{ data.run.winner_market }}</div>
+                            <div><strong>Score:</strong> {{ "%.3f"|format(data.run.winner_score or 0) }}</div>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="summary-grid">
+                <div class="card summary-card">
+                    <div class="muted">Universe Size</div>
+                    <div class="big">{{ data.run.universe_size }}</div>
+                </div>
+                <div class="card summary-card">
+                    <div class="muted">Stored Candidates</div>
+                    <div class="big">{{ data.candidates|length }}</div>
+                </div>
+                <div class="card summary-card">
+                    <div class="muted">Recent Picks</div>
+                    <div class="big">{{ data.picks|length }}</div>
+                </div>
+                <div class="card summary-card">
+                    <div class="muted">Decision</div>
+                    <div class="big">
+                        {% if data.run.should_trade %}YES{% else %}NO{% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <h2 style="margin: 0 0 14px 0;">Top 5 Candidates</h2>
+            <div class="top-cards">
+                {% for c in data.candidates[:5] %}
+                    <div class="card candidate-card">
+                        <div class="rank-pill">#{{ c.rank }}</div>
+                        <div class="candidate-ticker">{{ c.ticker }}</div>
+                        <div class="candidate-name">{{ c.name }}</div>
+
+                        <div style="margin-bottom: 12px;">
+                            {% if c.trend_ok %}
+                                <span class="pill good">Uptrend</span>
+                            {% else %}
+                                <span class="pill bad">Downtrend</span>
+                            {% endif %}
+
+                            {% if c.breakout_flag %}
+                                <span class="pill neutral">Breakout</span>
+                            {% endif %}
+                        </div>
+
+                        <div class="mini-grid">
+                            <div class="mini">
+                                <div class="label">Score</div>
+                                <div class="value">{{ "%.3f"|format(c.score) }}</div>
+                            </div>
+                            <div class="mini">
+                                <div class="label">Market</div>
+                                <div class="value">{{ c.market }}</div>
+                            </div>
+                            <div class="mini">
+                                <div class="label">5D</div>
+                                <div class="value">{{ "%.2f"|format(c.weekly_change_pct) }}%</div>
+                            </div>
+                            <div class="mini">
+                                <div class="label">20D</div>
+                                <div class="value">
+                                    {% if c.monthly_change_pct is not none %}
+                                        {{ "%.2f"|format(c.monthly_change_pct) }}%
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="mini">
+                                <div class="label">RS</div>
+                                <div class="value">{{ "%.2f"|format(c.relative_strength_pct) }}%</div>
+                            </div>
+                            <div class="mini">
+                                <div class="label">Volume</div>
+                                <div class="value">{{ "%.2f"|format(c.volume_ratio) }}x</div>
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+
+            <div class="tables">
+                <div class="card table-card">
+                    <div class="table-header">
+                        <h2>Leaderboard</h2>
+                        <div class="muted">Stored candidates from the latest scan</div>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Rank</th>
+                                <th>Ticker</th>
+                                <th>Name</th>
+                                <th>Market</th>
+                                <th>5D</th>
+                                <th>20D</th>
+                                <th>RS</th>
+                                <th>Vol</th>
+                                <th>Breakout</th>
+                                <th>Trend</th>
+                                <th>Score</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for c in data.candidates %}
+                            <tr>
+                                <td>{{ c.rank }}</td>
+                                <td><strong>{{ c.ticker }}</strong></td>
+                                <td>{{ c.name }}</td>
+                                <td>{{ c.market }}</td>
+                                <td>{{ "%.2f"|format(c.weekly_change_pct) }}%</td>
+                                <td>
+                                    {% if c.monthly_change_pct is not none %}
+                                        {{ "%.2f"|format(c.monthly_change_pct) }}%
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
+                                <td>{{ "%.2f"|format(c.relative_strength_pct) }}%</td>
+                                <td>{{ "%.2f"|format(c.volume_ratio) }}x</td>
+                                <td>
+                                    {% if c.breakout_flag %}
+                                        <span class="pill good">Yes</span>
+                                    {% else %}
+                                        <span class="pill bad">No</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if c.trend_ok %}
+                                        <span class="pill good">Up</span>
+                                    {% else %}
+                                        <span class="pill bad">Down</span>
+                                    {% endif %}
+                                </td>
+                                <td><strong>{{ "%.3f"|format(c.score) }}</strong></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="card table-card">
+                    <div class="table-header">
+                        <h2>Recent Picks</h2>
+                        <div class="muted">Latest saved recommendations</div>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Picked At</th>
+                                <th>Ticker</th>
+                                <th>Market</th>
+                                <th>Buy</th>
+                                <th>Target</th>
+                                <th>Stop</th>
+                                <th>Score</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for p in data.picks %}
+                            <tr>
+                                <td>{{ p.picked_at_utc }}</td>
+                                <td><strong>{{ p.ticker }}</strong></td>
+                                <td>{{ p.market }}</td>
+                                <td>{{ "%.2f"|format(p.latest_close) }}</td>
+                                <td>{{ "%.2f"|format(p.target_price) }}</td>
+                                <td>{{ "%.2f"|format(p.stop_price) }}</td>
+                                <td>{{ "%.3f"|format(p.score) }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        {% else %}
+            <div class="header">
+                <div>
+                    <h1>Trader Dashboard</h1>
+                    <div class="muted">No stored scan data yet</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>No scan data yet</h2>
+                <p class="muted">Run the scanner once and refresh this page.</p>
+            </div>
+        {% endif %}
+    </div>
+</body>
+</html>

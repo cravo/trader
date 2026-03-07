@@ -1,0 +1,22 @@
+services:
+  trader-scan:
+    build: .
+    container_name: trader-scan
+    command: python -m trader.cli pick --notify
+    env_file:
+      - .env
+    volumes:
+      - ./data:/data
+    restart: "no"
+
+  trader-web:
+    build: .
+    container_name: trader-web
+    command: python -m trader.web
+    env_file:
+      - .env
+    volumes:
+      - ./data:/data
+    ports:
+      - "5057:5000"
+    restart: unless-stopped
