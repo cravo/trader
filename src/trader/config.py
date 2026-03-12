@@ -42,6 +42,8 @@ class Settings:
     weight_relative_strength: float = _get_float("WEIGHT_RELATIVE_STRENGTH", 0.30)
     weight_volume_ratio: float = _get_float("WEIGHT_VOLUME_RATIO", 0.20)
     weight_breakout: float = _get_float("WEIGHT_BREAKOUT", 0.15)
+    weight_close_strength: float = _get_float("WEIGHT_CLOSE_STRENGTH", 1.0)
+    weight_proximity: float = _get_float("WEIGHT_PROXIMITY", 1.0)
 
     include_ftse100: bool = _get_bool("INCLUDE_FTSE100", True)
     include_ftse250: bool = _get_bool("INCLUDE_FTSE250", True)
@@ -56,6 +58,9 @@ class Settings:
     market_regime_filter: bool = _get_bool("MARKET_REGIME_FILTER", True)
     market_regime_ma: int = _get_int("MARKET_REGIME_MA", 50)
     market_regime_ticker: str = os.getenv("MARKET_REGIME_TICKER", "^GSPC")
+
+    market_regime_fast_ma: int = _get_int("MARKET_REGIME_FAST_MA", 20)
+    market_regime_slow_ma: int = _get_int("MARKET_REGIME_SLOW_MA", 50)
 
     use_rs_universe_filter: bool = _get_bool("USE_RS_UNIVERSE_FILTER", True)
     rs_universe_percent: float = _get_float("RS_UNIVERSE_PERCENT", 20.0)
@@ -73,6 +78,27 @@ class Settings:
     use_trend_filter: bool = _get_bool("USE_TREND_FILTER", True)
     trend_fast_ma_days: int = _get_int("TREND_FAST_MA_DAYS", 20)
     trend_slow_ma_days: int = _get_int("TREND_SLOW_MA_DAYS", 50)
+
+    min_20d_avg_volume: float = _get_float("MIN_20D_AVG_VOLUME", 1_000_000)
+    min_20d_avg_dollar_volume: float = _get_float("MIN_20D_AVG_DOLLAR_VOLUME", 50_000_000)
+
+    neutral_target_profit_pct: float = _get_float("NEUTRAL_TARGET_PROFIT_PCT", 4.5)
+    bearish_target_profit_pct: float = _get_float("BEARISH_TARGET_PROFIT_PCT", 4.0)
+
+    neutral_rs_universe_percent: float = _get_float("NEUTRAL_RS_UNIVERSE_PERCENT", 15.0)
+    bearish_rs_universe_percent: float = _get_float("BEARISH_RS_UNIVERSE_PERCENT", 10.0)
+
+    neutral_min_weekly_change_pct: float = _get_float("NEUTRAL_MIN_WEEKLY_CHANGE_PCT", 0.5)
+    bearish_min_weekly_change_pct: float = _get_float("BEARISH_MIN_WEEKLY_CHANGE_PCT", 1.0)
+
+    neutral_min_relative_strength_pct: float = _get_float("NEUTRAL_MIN_RELATIVE_STRENGTH_PCT", 1.0)
+    bearish_min_relative_strength_pct: float = _get_float("BEARISH_MIN_RELATIVE_STRENGTH_PCT", 2.0)
+
+    neutral_min_volume_ratio: float = _get_float("NEUTRAL_MIN_VOLUME_RATIO", 1.4)
+    bearish_min_volume_ratio: float = _get_float("BEARISH_MIN_VOLUME_RATIO", 1.6)
+
+    neutral_require_breakout: bool = _get_bool("NEUTRAL_REQUIRE_BREAKOUT", True)
+    bearish_require_breakout: bool = _get_bool("BEARISH_REQUIRE_BREAKOUT", True)
 
     webhook_url: str = os.getenv("WEBHOOK_URL", "")
     webhook_username: str = os.getenv("WEBHOOK_USERNAME", "Trader")

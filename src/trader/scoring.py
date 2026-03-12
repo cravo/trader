@@ -28,6 +28,8 @@ class ScoredCandidate:
     score: float
     atr_value: float
     atr_pct: float
+    close_position: float
+    distance_to_high: float
 
 def pct_return(series: pd.Series, periods_back: int) -> float | None:
     series = series.dropna()
@@ -132,6 +134,34 @@ def score_candidates(
         close_series = frame["Close"].dropna()
         high_series = frame["High"].dropna()
         volume_series = frame["Volume"].dropna()
+        low_series = frame["Low"].dropna()
+
+        avg_20d_close = float(close_series.iloc[-20:].mean())
+        avg_20d_volume = float(volume_series.iloc[-20:].mean())
+        avg_20d_dollar_volume = avg_20d_close * avg_20d_volume
+
+        if avg_20d_volume < settings.min_20d_avg_volume:
+            continue
+
+        if avg_20d_dollar_volume < settings.min_20d_avg_dollar_volume:
+            continue
+
+        range_today = high_series.iloc[-1] - low_series.iloc[-1]
+
+        if range_today <= 0:
+            close_position = 0.5
+        else:
+            close_position = (
+                close_series.iloc[-1] - low_series.iloc[-1]
+            ) / range_today
+    
+        if close_position < 0.6:
+            continue
+
+        high_20 = high_series.rolling(20).max().iloc[-1]
+
+        if high_20 <= 0:
+            continue
 
         min_needed = max(
             31,
@@ -142,6 +172,11 @@ def score_candidates(
             continue
 
         latest_close = float(close_series.iloc[-1])
+
+        distance_to_high = (high_20 - latest_close) / high_20
+
+        if distance_to_high > 0.05:
+            continue
 
         if member.market == "UK":
             if latest_close < settings.min_price_gbp:
@@ -213,11 +248,15 @@ def score_candidates(
 
         vol_adjusted_momentum = momentum_score / max(atr_pct, 0.01)
 
+        proximity_score = max(0, 0.03 - distance_to_high)
+
         score = (
             vol_adjusted_momentum * settings.weight_weekly_change
             + relative_strength_pct * settings.weight_relative_strength
             + volume_ratio * settings.weight_volume_ratio
             + breakout_flag * settings.weight_breakout
+            + close_position * settings.weight_close_strength
+            + proximity_score * settings.weight_proximity
         )
 
         candidates.append(
@@ -238,6 +277,8 @@ def score_candidates(
                 score=score,
                 atr_value=atr_value,
                 atr_pct=atr_pct,
+                close_position=close_position,
+                distance_to_high=distance_to_high,
             )
         )
 

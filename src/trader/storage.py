@@ -13,10 +13,10 @@ CREATE TABLE IF NOT EXISTS scan_runs (
     run_at_utc TEXT NOT NULL,
     universe_size INTEGER NOT NULL,
     regime_ticker TEXT NOT NULL,
-    regime_ma_days INTEGER NOT NULL,
-    regime_latest REAL,
-    regime_ma REAL,
-    regime_bullish INTEGER NOT NULL,
+    regime_state TEXT NOT NULL,
+    regime_price REAL,
+    regime_ma_fast REAL,
+    regime_ma_slow REAL,
     should_trade INTEGER NOT NULL,
     decision_reason TEXT NOT NULL,
     winner_ticker TEXT,
@@ -65,7 +65,6 @@ CREATE TABLE IF NOT EXISTS picks (
 
 
 def get_connection(database_path: str) -> sqlite3.Connection:
-
     path = Path(database_path)
     path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -76,7 +75,6 @@ def get_connection(database_path: str) -> sqlite3.Connection:
     conn.execute(PICKS_SCHEMA)
 
     conn.commit()
-
     return conn
 
 
@@ -84,15 +82,14 @@ def save_scan_run(
     database_path: str,
     universe_size: int,
     regime_ticker: str,
-    regime_ma_days: int,
-    regime_latest: float | None,
-    regime_ma: float | None,
-    regime_bullish: bool,
+    regime_state: str,
+    regime_price: float | None,
+    regime_ma_fast: float | None,
+    regime_ma_slow: float | None,
     should_trade: bool,
     decision_reason: str,
     winner: ScoredCandidate | None,
 ) -> int:
-
     conn = get_connection(database_path)
 
     run_time = datetime.now(timezone.utc).isoformat()
@@ -103,10 +100,10 @@ def save_scan_run(
             run_at_utc,
             universe_size,
             regime_ticker,
-            regime_ma_days,
-            regime_latest,
-            regime_ma,
-            regime_bullish,
+            regime_state,
+            regime_price,
+            regime_ma_fast,
+            regime_ma_slow,
             should_trade,
             decision_reason,
             winner_ticker,
@@ -120,10 +117,10 @@ def save_scan_run(
             run_time,
             universe_size,
             regime_ticker,
-            regime_ma_days,
-            regime_latest,
-            regime_ma,
-            1 if regime_bullish else 0,
+            regime_state,
+            regime_price,
+            regime_ma_fast,
+            regime_ma_slow,
             1 if should_trade else 0,
             decision_reason,
             winner.ticker if winner else None,
@@ -134,9 +131,7 @@ def save_scan_run(
     )
 
     conn.commit()
-
     scan_id = cursor.lastrowid
-
     conn.close()
 
     return scan_id
@@ -148,11 +143,9 @@ def save_scan_candidates(
     candidates: list[ScoredCandidate],
     limit: int = 10,
 ) -> None:
-
     conn = get_connection(database_path)
 
     for rank, c in enumerate(candidates[:limit], start=1):
-
         conn.execute(
             """
             INSERT INTO scan_candidates (
@@ -195,8 +188,7 @@ def save_scan_candidates(
     conn.close()
 
 
-def save_pick(database_path: str, winner: ScoredCandidate, target: float, stop: float):
-
+def save_pick(database_path: str, winner: ScoredCandidate, target: float, stop: float) -> None:
     conn = get_connection(database_path)
 
     conn.execute(

@@ -13,14 +13,11 @@ A small Python app to recommend swing trades, based on a one-week time horizon a
 
 ## Supported universes
 
-- FTSE 100
-- FTSE 250
 - S&P 500
 - Nasdaq-100
 
 ## Relative strength
 
-- UK stocks are compared against `^FTSE`
 - US stocks are compared against `^GSPC`
 
 ## Setup

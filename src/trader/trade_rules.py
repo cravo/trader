@@ -50,19 +50,55 @@ def choose_trade(
     history: pd.DataFrame,
     candidates: list[ScoredCandidate],
     settings: Settings,
+    regime_state: str,
 ) -> TradeDecision:
     working = list(candidates)
+
+    # Adaptive thresholds by market regime.
+    if regime_state == "bullish":
+        rs_percent = settings.rs_universe_percent if settings.use_rs_universe_filter else 100.0
+        min_weekly_change_pct = settings.min_weekly_change_pct
+        min_relative_strength_pct = settings.min_relative_strength_pct
+        min_volume_ratio = settings.min_volume_ratio
+        require_breakout = settings.require_breakout
+
+    elif regime_state == "neutral":
+        rs_percent = min(
+            getattr(settings, "neutral_rs_universe_percent", 15.0),
+            settings.rs_universe_percent if settings.use_rs_universe_filter else 100.0,
+        )
+        min_weekly_change_pct = max(settings.min_weekly_change_pct, getattr(settings, "neutral_min_weekly_change_pct", 0.5))
+        min_relative_strength_pct = max(settings.min_relative_strength_pct, getattr(settings, "neutral_min_relative_strength_pct", 1.0))
+        min_volume_ratio = max(settings.min_volume_ratio, getattr(settings, "neutral_min_volume_ratio", 1.4))
+        require_breakout = getattr(settings, "neutral_require_breakout", True)
+
+    elif regime_state == "bearish":
+        rs_percent = min(
+            getattr(settings, "bearish_rs_universe_percent", 10.0),
+            settings.rs_universe_percent if settings.use_rs_universe_filter else 100.0,
+        )
+        min_weekly_change_pct = max(settings.min_weekly_change_pct, getattr(settings, "bearish_min_weekly_change_pct", 1.0))
+        min_relative_strength_pct = max(settings.min_relative_strength_pct, getattr(settings, "bearish_min_relative_strength_pct", 2.0))
+        min_volume_ratio = max(settings.min_volume_ratio, getattr(settings, "bearish_min_volume_ratio", 1.6))
+        require_breakout = getattr(settings, "bearish_require_breakout", True)
+
+    else:
+        return TradeDecision(
+            should_trade=False,
+            reason=f"Unknown market regime: {regime_state}",
+            winner=None,
+        )
 
     if settings.use_rs_universe_filter:
         working = filter_top_relative_strength(
             candidates=working,
-            percent=settings.rs_universe_percent,
+            percent=rs_percent,
         )
 
         if not working:
             return TradeDecision(
                 should_trade=False,
-                reason="No candidates remained after relative strength universe filter",
+                reason=f"No candidates remained after relative strength universe filter in {regime_state} regime",
                 winner=None,
             )
 
@@ -77,13 +113,13 @@ def choose_trade(
             ):
                 continue
 
-        if c.weekly_change_pct <= settings.min_weekly_change_pct:
+        if c.weekly_change_pct <= min_weekly_change_pct:
             continue
-        if c.relative_strength_pct <= settings.min_relative_strength_pct:
+        if c.relative_strength_pct <= min_relative_strength_pct:
             continue
-        if c.volume_ratio < settings.min_volume_ratio:
+        if c.volume_ratio < min_volume_ratio:
             continue
-        if settings.require_breakout and c.breakout_flag != 1:
+        if require_breakout and c.breakout_flag != 1:
             continue
         if settings.use_trend_filter and not c.trend_ok:
             continue
@@ -93,7 +129,12 @@ def choose_trade(
     if not filtered:
         return TradeDecision(
             should_trade=False,
-            reason="No candidate passed the relative strength / regime / momentum / volume / breakout / trend filters",
+            reason=(
+                f"No candidate passed the filters for {regime_state} regime "
+                f"(RS top {rs_percent:.0f}%, min weekly {min_weekly_change_pct:.2f}%, "
+                f"min RS {min_relative_strength_pct:.2f}%, min volume {min_volume_ratio:.2f}x, "
+                f"breakout required={require_breakout})"
+            ),
             winner=None,
         )
 
@@ -101,6 +142,6 @@ def choose_trade(
 
     return TradeDecision(
         should_trade=True,
-        reason="Trade approved",
+        reason=f"Trade approved in {regime_state} regime",
         winner=filtered[0],
     )

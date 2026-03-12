@@ -12,7 +12,7 @@ def build_trade_webhook_payload(candidate, top_candidates, settings):
 
     buy_price = candidate.latest_close
     target_price = buy_price * (1 + settings.target_profit_pct / 100)
-    stop_price = buy_price * (1 - settings.stop_loss_pct / 100)
+    stop_price = buy_price - (1.5 * candidate.atr_value)
 
     leaderboard = "\n".join(
         [
