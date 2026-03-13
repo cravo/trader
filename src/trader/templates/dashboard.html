@@ -95,6 +95,37 @@
             margin-bottom: 18px;
         }
 
+        .freshness-banner {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 18px;
+        }
+
+        .freshness-item {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: center;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.06);
+            border-radius: 12px;
+            padding: 12px 14px;
+        }
+
+        .freshness-item .label {
+            color: var(--muted);
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            margin-bottom: 4px;
+        }
+
+        .freshness-item .value {
+            font-size: 15px;
+            font-weight: 700;
+        }
+
         .card {
             background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
             border: 1px solid var(--border);
@@ -195,6 +226,34 @@
             grid-template-columns: repeat(4, 1fr);
             gap: 18px;
             margin-bottom: 18px;
+        }
+
+        .kpi-strip {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+            margin-bottom: 18px;
+        }
+
+        .kpi {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.06);
+            border-radius: 14px;
+            padding: 12px;
+        }
+
+        .kpi .label {
+            color: var(--muted);
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            margin-bottom: 6px;
+        }
+
+        .kpi .value {
+            font-size: 20px;
+            font-weight: 800;
+            line-height: 1.2;
         }
 
         .summary-card .big {
@@ -342,6 +401,10 @@
             padding: 0;
         }
 
+        .table-card.full-width {
+            grid-column: 1 / -1;
+        }
+
         .table-header {
             padding: 18px 20px 12px 20px;
         }
@@ -394,8 +457,28 @@
             color: #dbeafe;
         }
 
+        .pill.warn {
+            background: rgba(245, 158, 11, 0.14);
+            color: #fcd34d;
+        }
+
+        .methodology {
+            margin-top: 18px;
+            padding: 16px 18px;
+            border-radius: 14px;
+            border: 1px solid rgba(255,255,255,0.07);
+            background: rgba(255,255,255,0.02);
+            color: var(--muted);
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
         @media (max-width: 1200px) {
             .top-cards {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .kpi-strip {
                 grid-template-columns: repeat(2, 1fr);
             }
 
@@ -416,7 +499,9 @@
         @media (max-width: 700px) {
             .metrics,
             .summary-grid,
-            .top-cards {
+            .top-cards,
+            .freshness-banner,
+            .kpi-strip {
                 grid-template-columns: 1fr;
             }
 
@@ -453,6 +538,28 @@
                 {% else %}
                     <span class="badge warn">Market regime unknown</span>
                 {% endif %}
+            </div>
+
+            <div class="freshness-banner">
+                <div class="freshness-item">
+                    <div>
+                        <div class="label">Scan Freshness</div>
+                        <div class="value">{{ data.freshness.scan.label }}</div>
+                    </div>
+                    <span class="badge {{ 'good' if data.freshness.scan.state == 'fresh' else ('warn' if data.freshness.scan.state == 'aging' else 'bad') }}">
+                        {{ data.freshness.scan.state|capitalize }}
+                    </span>
+                </div>
+                <div class="freshness-item">
+                    <div>
+                        <div class="label">Evaluation Freshness</div>
+                        <div class="value">{{ data.freshness.evaluation.label }}</div>
+                    </div>
+                    {% set eval_state = data.freshness.evaluation.state %}
+                    <span class="badge {{ 'good' if eval_state == 'fresh' else ('warn' if eval_state == 'aging' else ('bad' if eval_state == 'stale' else 'warn')) }}">
+                        {{ eval_state|capitalize }}
+                    </span>
+                </div>
             </div>
 
             <div class="hero">
@@ -537,6 +644,37 @@
                     <div class="big">
                         {% if data.run.should_trade %}YES{% else %}NO{% endif %}
                     </div>
+                </div>
+            </div>
+
+            <div class="kpi-strip">
+                <div class="kpi">
+                    <div class="label">Recent Evaluated</div>
+                    <div class="value">{{ data.kpi_strip.evaluated_count }}</div>
+                </div>
+                <div class="kpi">
+                    <div class="label">Recent Win Rate</div>
+                    <div class="value">
+                        {% if data.kpi_strip.win_rate_pct is not none %}
+                            {{ "%.1f"|format(data.kpi_strip.win_rate_pct) }}%
+                        {% else %}
+                            -
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="kpi">
+                    <div class="label">Recent Avg Return</div>
+                    <div class="value">
+                        {% if data.kpi_strip.avg_return_pct is not none %}
+                            {{ "%.2f"|format(data.kpi_strip.avg_return_pct) }}%
+                        {% else %}
+                            -
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="kpi">
+                    <div class="label">Target / Stop Hits</div>
+                    <div class="value">{{ data.kpi_strip.target_hits }} / {{ data.kpi_strip.stop_hits }}</div>
                 </div>
             </div>
 
@@ -743,6 +881,41 @@
             </div>
 
             <div class="tables">
+                <div class="card table-card full-width">
+                    <div class="table-header">
+                        <h2>Recent Picks</h2>
+                        <div class="muted">Latest saved recommendations</div>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Picked At</th>
+                                <th>Ticker</th>
+                                <th>Lifecycle</th>
+                                <th>Market</th>
+                                <th>Buy</th>
+                                <th>Target</th>
+                                <th>Stop</th>
+                                <th>Score</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for p in data.picks %}
+                            <tr>
+                                <td>{{ p.picked_at_utc }}</td>
+                                <td><strong>{{ p.ticker }}</strong></td>
+                                <td><span class="pill {{ p.lifecycle.tone }}">{{ p.lifecycle.label }}</span></td>
+                                <td>{{ p.market }}</td>
+                                <td>{{ "%.2f"|format(p.latest_close) }}</td>
+                                <td>{{ "%.2f"|format(p.target_price) }}</td>
+                                <td>{{ "%.2f"|format(p.stop_price) }}</td>
+                                <td>{{ "%.3f"|format(p.score) }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
                 <div class="card table-card">
                     <div class="table-header">
                         <h2>Leaderboard</h2>
@@ -854,39 +1027,13 @@
                         </tbody>
                     </table>
                 </div>
+            </div>
 
-                <div class="card table-card">
-                    <div class="table-header">
-                        <h2>Recent Picks</h2>
-                        <div class="muted">Latest saved recommendations</div>
-                    </div>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Picked At</th>
-                                <th>Ticker</th>
-                                <th>Market</th>
-                                <th>Buy</th>
-                                <th>Target</th>
-                                <th>Stop</th>
-                                <th>Score</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for p in data.picks %}
-                            <tr>
-                                <td>{{ p.picked_at_utc }}</td>
-                                <td><strong>{{ p.ticker }}</strong></td>
-                                <td>{{ p.market }}</td>
-                                <td>{{ "%.2f"|format(p.latest_close) }}</td>
-                                <td>{{ "%.2f"|format(p.target_price) }}</td>
-                                <td>{{ "%.2f"|format(p.stop_price) }}</td>
-                                <td>{{ "%.3f"|format(p.score) }}</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
+            <div class="methodology">
+                <strong>Methodology:</strong> Picks come from a rules-based momentum model combining 5D and 20D performance,
+                relative strength versus benchmark, volume expansion, breakout context, and trend checks. Regime gating uses
+                fast/slow moving averages on the benchmark index to shift between risk-on, selective, and defensive posture.
+                Target/stop outcomes shown above are post-pick evaluations, not live execution advice.
             </div>
         {% else %}
             <div class="header">

@@ -26,6 +26,48 @@ def parse_iso_utc(value: str) -> datetime:
     return dt.astimezone(timezone.utc)
 
 
+def _format_age_label(age: timedelta) -> str:
+    total_seconds = max(0, int(age.total_seconds()))
+    if total_seconds < 60:
+        return "just now"
+    if total_seconds < 3600:
+        return f"{total_seconds // 60}m ago"
+    if total_seconds < 86400:
+        return f"{total_seconds // 3600}h ago"
+    return f"{total_seconds // 86400}d ago"
+
+
+def _freshness_state(age: timedelta) -> str:
+    if age <= timedelta(hours=24):
+        return "fresh"
+    if age <= timedelta(hours=36):
+        return "aging"
+    return "stale"
+
+
+def _pick_lifecycle_chip(outcomes: list[dict]) -> dict[str, str]:
+    if not outcomes:
+        return {"label": "Open", "tone": "neutral"}
+
+    hit_target = any(bool(row.get("hit_target")) for row in outcomes)
+    hit_stop = any(bool(row.get("hit_stop")) for row in outcomes)
+    if hit_stop:
+        return {"label": "Stopped", "tone": "bad"}
+    if hit_target:
+        return {"label": "Target Hit", "tone": "good"}
+
+    fully_evaluated = {
+        int(row.get("horizon_days") or 0)
+        for row in outcomes
+        if int(row.get("bars_available") or 0) >= int(row.get("horizon_days") or 0) > 0
+    }
+    if 10 in fully_evaluated:
+        return {"label": "10D Evaluated", "tone": "good"}
+    if 5 in fully_evaluated:
+        return {"label": "5D Evaluated", "tone": "warn"}
+    return {"label": "Pending Eval", "tone": "neutral"}
+
+
 def _build_sparkline_points(
     values: list[float],
     width: int = 320,
@@ -220,8 +262,6 @@ def load_dashboard_data() -> dict:
         """
     ).fetchall()
 
-    conn.close()
-
     outcome_summary_raw = get_outcome_summary_by_horizon(settings.database_path)
     outcome_summary: dict[int, dict] = {}
     for row in outcome_summary_raw:
@@ -241,6 +281,27 @@ def load_dashboard_data() -> dict:
         }
 
     recent_outcomes = get_recent_pick_outcomes(settings.database_path, limit=20)
+
+    picks_list = [dict(row) for row in picks]
+    pick_ids = [int(p["id"]) for p in picks_list]
+
+    outcomes_by_pick: dict[int, list[dict]] = {pick_id: [] for pick_id in pick_ids}
+    if pick_ids:
+        placeholders = ",".join("?" for _ in pick_ids)
+        pick_outcomes_rows = conn.execute(
+            f"""
+            SELECT pick_id, horizon_days, bars_available, hit_target, hit_stop
+            FROM pick_outcomes
+            WHERE pick_id IN ({placeholders})
+            """,
+            tuple(pick_ids),
+        ).fetchall()
+
+        for row in pick_outcomes_rows:
+            row_dict = dict(row)
+            outcomes_by_pick.setdefault(int(row_dict["pick_id"]), []).append(row_dict)
+
+    conn.close()
 
     trend_values: dict[int, list[float]] = {5: [], 10: []}
     for row in reversed(recent_outcomes):
@@ -274,9 +335,11 @@ def load_dashboard_data() -> dict:
         }
 
     run_at = parse_iso_utc(run_dict["run_at_utc"])
-    age = datetime.now(timezone.utc) - run_at
+    now_utc = datetime.now(timezone.utc)
+    age = now_utc - run_at
     run_dict["is_stale"] = age > timedelta(hours=36)
     run_dict["age_seconds"] = int(age.total_seconds())
+    run_dict["age_label"] = _format_age_label(age)
 
     # Backward-compatible display fields for the dashboard template.
     run_dict["regime_latest"] = run_dict.get("regime_price")
@@ -285,13 +348,60 @@ def load_dashboard_data() -> dict:
     run_dict["regime_ma_slow_days"] = settings.market_regime_slow_ma
     run_dict["regime_bullish"] = run_dict.get("regime_state") == "bullish"
 
+    scan_freshness = {
+        "state": _freshness_state(age),
+        "label": run_dict["age_label"],
+        "timestamp": run_dict["run_at_utc"],
+    }
+
+    latest_eval = None
+    eval_freshness = {"state": "none", "label": "no evaluations yet", "timestamp": None}
+    if recent_outcomes:
+        latest_eval = max(recent_outcomes, key=lambda row: row.get("evaluated_at_utc") or "")
+    if latest_eval and latest_eval.get("evaluated_at_utc"):
+        eval_at = parse_iso_utc(str(latest_eval["evaluated_at_utc"]))
+        eval_age = now_utc - eval_at
+        eval_freshness = {
+            "state": _freshness_state(eval_age),
+            "label": _format_age_label(eval_age),
+            "timestamp": str(latest_eval["evaluated_at_utc"]),
+        }
+
+    evaluated_returns = [
+        float(row["outcome_return_pct"])
+        for row in recent_outcomes
+        if row.get("outcome_return_pct") is not None
+        and int(row.get("bars_available") or 0) >= int(row.get("horizon_days") or 0)
+    ]
+    positive_count = len([value for value in evaluated_returns if value > 0])
+    recent_count = len(evaluated_returns)
+    target_hits = len([row for row in recent_outcomes if bool(row.get("hit_target"))])
+    stop_hits = len([row for row in recent_outcomes if bool(row.get("hit_stop"))])
+
+    kpi_strip = {
+        "evaluated_count": recent_count,
+        "win_rate_pct": ((positive_count / recent_count) * 100.0) if recent_count else None,
+        "avg_return_pct": (sum(evaluated_returns) / recent_count) if recent_count else None,
+        "target_hits": target_hits,
+        "stop_hits": stop_hits,
+    }
+
+    for pick in picks_list:
+        pick_id = int(pick["id"])
+        pick["lifecycle"] = _pick_lifecycle_chip(outcomes_by_pick.get(pick_id, []))
+
     return {
         "run": run_dict,
         "candidates": [dict(row) for row in candidates],
-        "picks": [dict(row) for row in picks],
+        "picks": picks_list,
         "outcome_summary": outcome_summary,
         "recent_outcomes": recent_outcomes,
         "outcome_trends": outcome_trends,
+        "freshness": {
+            "scan": scan_freshness,
+            "evaluation": eval_freshness,
+        },
+        "kpi_strip": kpi_strip,
     }
 
 
