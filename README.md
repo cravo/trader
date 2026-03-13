@@ -49,6 +49,18 @@ Run locally (non-Docker):
 PYTHONPATH=src DATABASE_PATH=data/momentum.db python -m trader.cli evaluate --horizons 5,10 --limit 200
 ```
 
+## Backtest
+
+Run a historical replay of the current selection logic:
+
+```bash
+PYTHONPATH=src DATABASE_PATH=data/momentum.db python -m trader.cli backtest --lookback-period 3y --horizon-days 5 --max-days 180 --step-days 5
+```
+
+Notes:
+- `--step-days 5` approximates weekly signal evaluation and runs much faster than daily.
+- `--horizon-days` should typically match your intended hold period.
+
 ## Cron Examples
 
 ```bash

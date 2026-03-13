@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 from datetime import datetime, timezone
 
+from .backtest import run_backtest
 from .config import Settings
 from .market_data import download_price_history, extract_ticker_frame
 from .notifier import send_no_trade_webhook, send_trade_webhook
@@ -71,6 +72,32 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=200,
         help="Maximum number of recent picks to evaluate",
+    )
+
+    backtest_parser = subparsers.add_parser("backtest", help="Run historical backtest of current pick logic")
+    backtest_parser.add_argument(
+        "--lookback-period",
+        type=str,
+        default="3y",
+        help="Historical period to download (e.g. 2y, 3y, 5y)",
+    )
+    backtest_parser.add_argument(
+        "--horizon-days",
+        type=int,
+        default=5,
+        help="Forward holding horizon used to evaluate each signal",
+    )
+    backtest_parser.add_argument(
+        "--max-days",
+        type=int,
+        default=180,
+        help="Maximum trailing signal days to evaluate",
+    )
+    backtest_parser.add_argument(
+        "--step-days",
+        type=int,
+        default=5,
+        help="Evaluate every Nth trading day signal (5 ~= weekly)",
     )
 
     return parser
@@ -219,6 +246,73 @@ def run_evaluate(args: argparse.Namespace) -> int:
             f"stop_hit={hit_stop_pct:.1f}%, "
             f"avg_return={avg_return:.2f}%"
         )
+
+    return 0
+
+
+def run_backtest_command(args: argparse.Namespace) -> int:
+    settings = Settings()
+
+    print("Building mixed UK/US universe for backtest...")
+    universe_members = build_universe(
+        include_ftse100=settings.include_ftse100,
+        include_ftse250=settings.include_ftse250,
+        include_sp500=settings.include_sp500,
+        include_nasdaq100=settings.include_nasdaq100,
+    )
+    print(f"Universe size: {len(universe_members)}")
+
+    tickers = [m.ticker_yahoo for m in universe_members]
+    benchmarks = [
+        settings.uk_benchmark_ticker,
+        settings.us_benchmark_ticker,
+        settings.market_regime_ticker,
+    ]
+    all_tickers = list(dict.fromkeys(tickers + benchmarks))
+
+    print(f"Downloading history for backtest: {args.lookback_period}")
+    history = download_price_history(all_tickers, period=args.lookback_period)
+
+    trades, summary = run_backtest(
+        history=history,
+        universe_members=universe_members,
+        settings=settings,
+        horizon_days=args.horizon_days,
+        max_days=args.max_days,
+        step_days=args.step_days,
+    )
+
+    if "error" in summary:
+        print(f"Backtest failed: {summary['error']}")
+        return 1
+
+    print("\nBacktest summary")
+    print("-" * 80)
+    print(f"Signals considered: {summary['signals_considered']}")
+    print(f"No-trade signals:    {summary['no_trade_signals']}")
+    print(f"Trades taken:        {summary['trade_count']}")
+    print(f"Trade rate:          {summary['trade_rate_pct']:.1f}%")
+    print(f"Avg return:          {summary['avg_return_pct']:.2f}%")
+    print(f"Target hit rate:     {summary['target_hit_pct']:.1f}%")
+    print(f"Stop hit rate:       {summary['stop_hit_pct']:.1f}%")
+
+    print("\nBy regime")
+    for regime in ["bullish", "neutral", "bearish", "unknown"]:
+        row = summary["by_regime"].get(regime, {})
+        print(
+            f"- {regime:7} trades={int(row.get('trade_count', 0)):<4} "
+            f"avg={row.get('avg_return_pct', 0.0):6.2f}% "
+            f"target={row.get('target_hit_pct', 0.0):5.1f}% "
+            f"stop={row.get('stop_hit_pct', 0.0):5.1f}%"
+        )
+
+    if trades:
+        print("\nRecent simulated trades")
+        for t in trades[-5:]:
+            print(
+                f"- {t.signal_date} {t.ticker:8} regime={t.regime_state:7} "
+                f"ret={t.return_pct:6.2f}% reason={t.exit_reason}"
+            )
 
     return 0
 
@@ -414,6 +508,9 @@ def main() -> int:
 
     if args.command == "evaluate":
         return run_evaluate(args)
+
+    if args.command == "backtest":
+        return run_backtest_command(args)
 
     parser.print_help()
     return 1
