@@ -2,15 +2,19 @@ from __future__ import annotations
 
 import sqlite3
 from datetime import datetime, timezone, timedelta
+from typing import Any
 
 from flask import Flask, render_template, jsonify
 
 from .config import Settings
+from .market_data import download_price_history, extract_ticker_frame
 from .storage import get_outcome_summary_by_horizon, get_recent_pick_outcomes
 
 
 app = Flask(__name__)
 settings = Settings()
+PRICE_SPARKLINE_TTL = timedelta(minutes=20)
+_PRICE_SPARKLINE_CACHE: dict[str, dict[str, Any]] = {}
 
 
 def get_db_connection() -> sqlite3.Connection:
@@ -66,6 +70,76 @@ def _pick_lifecycle_chip(outcomes: list[dict]) -> dict[str, str]:
     if 5 in fully_evaluated:
         return {"label": "5D Evaluated", "tone": "warn"}
     return {"label": "Pending Eval", "tone": "neutral"}
+
+
+def _empty_price_chart() -> dict[str, Any]:
+    return {
+        "points": "",
+        "change_pct": None,
+        "change_display": "-",
+        "latest": None,
+        "state": "none",
+    }
+
+
+def _build_price_sparklines(tickers: list[str]) -> dict[str, dict[str, Any]]:
+    now = datetime.now(timezone.utc)
+    unique_tickers = [str(t).strip() for t in dict.fromkeys(tickers) if str(t).strip()]
+    charts: dict[str, dict[str, Any]] = {}
+    to_fetch: list[str] = []
+
+    for ticker in unique_tickers:
+        cached = _PRICE_SPARKLINE_CACHE.get(ticker)
+        if cached:
+            fetched_at = cached.get("fetched_at")
+            if isinstance(fetched_at, datetime) and (now - fetched_at) <= PRICE_SPARKLINE_TTL:
+                charts[ticker] = dict(cached.get("chart") or _empty_price_chart())
+                continue
+        to_fetch.append(ticker)
+
+    if to_fetch:
+        try:
+            history = download_price_history(
+                to_fetch,
+                period="3mo",
+                chunk_size=20,
+                sleep_seconds=0.0,
+                retries=1,
+                timeout_seconds=15,
+            )
+
+            for ticker in to_fetch:
+                chart = _empty_price_chart()
+                frame = extract_ticker_frame(history, ticker)
+                if not frame.empty and "Close" in frame.columns:
+                    closes = frame["Close"].dropna().astype(float).tail(30).tolist()
+                    if len(closes) >= 2:
+                        start = closes[0]
+                        latest = closes[-1]
+                        change_pct = ((latest / start) - 1.0) * 100.0 if start else None
+                        chart = {
+                            "points": _build_sparkline_points(closes),
+                            "change_pct": change_pct,
+                            "change_display": (
+                                f"{change_pct:+.2f}%" if change_pct is not None else "-"
+                            ),
+                            "latest": latest,
+                            "state": "up" if (change_pct is not None and change_pct >= 0) else "down",
+                        }
+
+                charts[ticker] = chart
+                _PRICE_SPARKLINE_CACHE[ticker] = {"fetched_at": now, "chart": chart}
+
+        except Exception:
+            # Keep dashboard responsive even if market data API is unavailable.
+            for ticker in to_fetch:
+                chart = _PRICE_SPARKLINE_CACHE.get(ticker, {}).get("chart") or _empty_price_chart()
+                charts[ticker] = dict(chart)
+
+    for ticker in unique_tickers:
+        charts.setdefault(ticker, _empty_price_chart())
+
+    return charts
 
 
 def _build_sparkline_points(
@@ -390,9 +464,15 @@ def load_dashboard_data() -> dict:
         pick_id = int(pick["id"])
         pick["lifecycle"] = _pick_lifecycle_chip(outcomes_by_pick.get(pick_id, []))
 
+    candidate_list = [dict(row) for row in candidates]
+    top_candidate_tickers = [c["ticker"] for c in candidate_list[:5]]
+    price_sparklines = _build_price_sparklines(top_candidate_tickers)
+    for c in candidate_list[:5]:
+        c["price_chart"] = price_sparklines.get(c["ticker"], _empty_price_chart())
+
     return {
         "run": run_dict,
-        "candidates": [dict(row) for row in candidates],
+        "candidates": candidate_list,
         "picks": picks_list,
         "outcome_summary": outcome_summary,
         "recent_outcomes": recent_outcomes,

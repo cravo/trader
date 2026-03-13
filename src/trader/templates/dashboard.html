@@ -371,6 +371,33 @@
             gap: 10px;
         }
 
+        .price-sparkline {
+            margin: 10px 0 12px 0;
+            width: 100%;
+            height: 70px;
+            border-radius: 10px;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.06);
+            padding: 4px;
+        }
+
+        .price-sparkline .line-up {
+            stroke: #22c55e;
+        }
+
+        .price-sparkline .line-down {
+            stroke: #ef4444;
+        }
+
+        .price-meta {
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+            color: var(--muted);
+            font-size: 12px;
+            margin-bottom: 8px;
+        }
+
         .mini {
             background: rgba(255,255,255,0.03);
             border-radius: 12px;
@@ -831,6 +858,31 @@
                         <div class="rank-pill">#{{ c.rank }}</div>
                         <div class="candidate-ticker">{{ c.ticker }}</div>
                         <div class="candidate-name">{{ c.name }}</div>
+
+                        <div class="price-sparkline">
+                            <svg viewBox="0 0 320 90" width="100%" height="60" preserveAspectRatio="none">
+                                <line x1="0" y1="45" x2="320" y2="45" stroke="rgba(255,255,255,0.12)" stroke-width="1" />
+                                {% if c.price_chart and c.price_chart.points %}
+                                    <polyline
+                                        fill="none"
+                                        class="{{ 'line-up' if c.price_chart.state == 'up' else 'line-down' }}"
+                                        stroke-width="2.5"
+                                        points="{{ c.price_chart.points }}"
+                                    />
+                                {% endif %}
+                            </svg>
+                        </div>
+
+                        <div class="price-meta">
+                            <span>1M Price</span>
+                            <span>
+                                {% if c.price_chart %}
+                                    {{ c.price_chart.change_display }}
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </span>
+                        </div>
 
                         <div style="margin-bottom: 12px;">
                             {% if c.trend_ok %}
