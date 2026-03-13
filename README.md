@@ -33,8 +33,34 @@ python3 scripts/update_universe.py >> /var/log/trader-universe.log 2>&1
 docker compose build
 docker compose up -d trader-web
 docker compose run --rm trader-scan
+```
 
+## Evaluate Pick Outcomes
+
+Run from Docker (uses the same mounted `/data/momentum.db` database):
+
+```bash
+docker compose run --rm trader-scan python -m trader.cli evaluate --horizons 5,10 --limit 200
+```
+
+Run locally (non-Docker):
+
+```bash
+PYTHONPATH=src DATABASE_PATH=data/momentum.db python -m trader.cli evaluate --horizons 5,10 --limit 200
+```
+
+## Cron Examples
+
+```bash
 crontab -e
+
+# Weekday scan job (08:10)
 10 8 * * 1-5 cd ~/trader && docker compose run --rm trader-scan >> /var/log/trader-scan.log 2>&1
+
+# Weekly universe refresh (Monday 06:00)
 0 6 * * 1 cd ~/trader && python3 scripts/update_universe.py >> /var/log/trader-universe.log 2>&1
+
+# Nightly outcome evaluation (01:15)
+15 1 * * * cd ~/trader && docker compose run --rm trader-scan python -m trader.cli evaluate --horizons 5,10 --limit 200 >> /var/log/trader-evaluate.log 2>&1
+```
 

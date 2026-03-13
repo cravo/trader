@@ -203,6 +203,70 @@
             margin-top: 8px;
         }
 
+        .trend-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 18px;
+            margin-bottom: 22px;
+        }
+
+        .trend-chart {
+            margin-top: 8px;
+            width: 100%;
+            height: 100px;
+            border-radius: 12px;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.06);
+            padding: 4px;
+        }
+
+        .trend-line-good {
+            stroke: #22c55e;
+        }
+
+        .trend-line-bad {
+            stroke: #ef4444;
+        }
+
+        .trend-meta {
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+            margin-top: 10px;
+            color: var(--muted);
+            font-size: 12px;
+        }
+
+        .trend-legend {
+            display: flex;
+            gap: 16px;
+            align-items: center;
+            color: var(--muted);
+            font-size: 12px;
+            margin-top: 8px;
+        }
+
+        .legend-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .legend-swatch {
+            width: 18px;
+            height: 3px;
+            border-radius: 99px;
+            display: inline-block;
+        }
+
+        .legend-swatch.good {
+            background: #22c55e;
+        }
+
+        .legend-swatch.bad {
+            background: #ef4444;
+        }
+
         .top-cards {
             display: grid;
             grid-template-columns: repeat(5, 1fr);
@@ -333,6 +397,10 @@
         @media (max-width: 1200px) {
             .top-cards {
                 grid-template-columns: repeat(2, 1fr);
+            }
+
+            .trend-grid {
+                grid-template-columns: 1fr;
             }
 
             .summary-grid {
@@ -472,6 +540,152 @@
                 </div>
             </div>
 
+            <h2 style="margin: 0 0 14px 0;">Pick Outcomes</h2>
+            <div class="summary-grid">
+                {% set s5 = data.outcome_summary.get(5) %}
+                {% set s10 = data.outcome_summary.get(10) %}
+                <div class="card summary-card">
+                    <div class="muted">5D Evaluated</div>
+                    <div class="big">{{ s5.evaluated_count if s5 else 0 }}</div>
+                    <div class="muted" style="margin-top: 8px;">
+                        Avg Return:
+                        {% if s5 and s5.avg_return_pct is not none %}
+                            {{ "%.2f"|format(s5.avg_return_pct) }}%
+                        {% else %}
+                            -
+                        {% endif %}
+                    </div>
+                    <div class="muted">
+                        Target/Stop Hit:
+                        {% if s5 and s5.target_hit_pct is not none and s5.stop_hit_pct is not none %}
+                            {{ "%.1f"|format(s5.target_hit_pct) }}% / {{ "%.1f"|format(s5.stop_hit_pct) }}%
+                        {% else %}
+                            -
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="card summary-card">
+                    <div class="muted">10D Evaluated</div>
+                    <div class="big">{{ s10.evaluated_count if s10 else 0 }}</div>
+                    <div class="muted" style="margin-top: 8px;">
+                        Avg Return:
+                        {% if s10 and s10.avg_return_pct is not none %}
+                            {{ "%.2f"|format(s10.avg_return_pct) }}%
+                        {% else %}
+                            -
+                        {% endif %}
+                    </div>
+                    <div class="muted">
+                        Target/Stop Hit:
+                        {% if s10 and s10.target_hit_pct is not none and s10.stop_hit_pct is not none %}
+                            {{ "%.1f"|format(s10.target_hit_pct) }}% / {{ "%.1f"|format(s10.stop_hit_pct) }}%
+                        {% else %}
+                            -
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="card summary-card">
+                    <div class="muted">5D Avg MFE / MAE</div>
+                    <div class="big" style="font-size: 20px;">
+                        {% if s5 and s5.avg_mfe_pct is not none and s5.avg_mae_pct is not none %}
+                            {{ "%.2f"|format(s5.avg_mfe_pct) }}% / {{ "%.2f"|format(s5.avg_mae_pct) }}%
+                        {% else %}
+                            -
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="card summary-card">
+                    <div class="muted">10D Avg MFE / MAE</div>
+                    <div class="big" style="font-size: 20px;">
+                        {% if s10 and s10.avg_mfe_pct is not none and s10.avg_mae_pct is not none %}
+                            {{ "%.2f"|format(s10.avg_mfe_pct) }}% / {{ "%.2f"|format(s10.avg_mae_pct) }}%
+                        {% else %}
+                            -
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="trend-grid">
+                {% set t5 = data.outcome_trends.get(5) %}
+                {% set t10 = data.outcome_trends.get(10) %}
+                <div class="card">
+                    <h3 style="margin-bottom: 4px;">5D Return Trend</h3>
+                    <div class="muted">Latest {{ t5["values"]|length if t5 else 0 }} fully evaluated picks</div>
+                    <div class="trend-chart">
+                        <svg viewBox="0 0 320 90" width="100%" height="90" preserveAspectRatio="none">
+                            <line x1="0" y1="{{ "%.1f"|format(t5.zero_y if t5 else 45) }}" x2="320" y2="{{ "%.1f"|format(t5.zero_y if t5 else 45) }}" stroke="rgba(255,255,255,0.12)" stroke-width="1" />
+                            {% if t5 and t5.segments %}
+                                {% for seg in t5.segments %}
+                                    <polyline
+                                        fill="none"
+                                        class="{{ 'trend-line-good' if seg.color == 'good' else 'trend-line-bad' }}"
+                                        stroke-width="2.5"
+                                        points="{{ seg.points }}"
+                                    />
+                                {% endfor %}
+                            {% endif %}
+                        </svg>
+                    </div>
+                    <div class="trend-legend">
+                        <span class="legend-item"><span class="legend-swatch good"></span>Positive return</span>
+                        <span class="legend-item"><span class="legend-swatch bad"></span>Negative return</span>
+                    </div>
+                    <div class="trend-meta">
+                        <span>
+                            Min:
+                            {% if t5 and t5.min is not none %}{{ "%.2f"|format(t5.min) }}%{% else %}-{% endif %}
+                        </span>
+                        <span>
+                            Latest:
+                            {% if t5 and t5.latest is not none %}{{ "%.2f"|format(t5.latest) }}%{% else %}-{% endif %}
+                        </span>
+                        <span>
+                            Max:
+                            {% if t5 and t5.max is not none %}{{ "%.2f"|format(t5.max) }}%{% else %}-{% endif %}
+                        </span>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3 style="margin-bottom: 4px;">10D Return Trend</h3>
+                    <div class="muted">Latest {{ t10["values"]|length if t10 else 0 }} fully evaluated picks</div>
+                    <div class="trend-chart">
+                        <svg viewBox="0 0 320 90" width="100%" height="90" preserveAspectRatio="none">
+                            <line x1="0" y1="{{ "%.1f"|format(t10.zero_y if t10 else 45) }}" x2="320" y2="{{ "%.1f"|format(t10.zero_y if t10 else 45) }}" stroke="rgba(255,255,255,0.12)" stroke-width="1" />
+                            {% if t10 and t10.segments %}
+                                {% for seg in t10.segments %}
+                                    <polyline
+                                        fill="none"
+                                        class="{{ 'trend-line-good' if seg.color == 'good' else 'trend-line-bad' }}"
+                                        stroke-width="2.5"
+                                        points="{{ seg.points }}"
+                                    />
+                                {% endfor %}
+                            {% endif %}
+                        </svg>
+                    </div>
+                    <div class="trend-legend">
+                        <span class="legend-item"><span class="legend-swatch good"></span>Positive return</span>
+                        <span class="legend-item"><span class="legend-swatch bad"></span>Negative return</span>
+                    </div>
+                    <div class="trend-meta">
+                        <span>
+                            Min:
+                            {% if t10 and t10.min is not none %}{{ "%.2f"|format(t10.min) }}%{% else %}-{% endif %}
+                        </span>
+                        <span>
+                            Latest:
+                            {% if t10 and t10.latest is not none %}{{ "%.2f"|format(t10.latest) }}%{% else %}-{% endif %}
+                        </span>
+                        <span>
+                            Max:
+                            {% if t10 and t10.max is not none %}{{ "%.2f"|format(t10.max) }}%{% else %}-{% endif %}
+                        </span>
+                    </div>
+                </div>
+            </div>
+
             <h2 style="margin: 0 0 14px 0;">Top 5 Candidates</h2>
             <div class="top-cards">
                 {% for c in data.candidates[:5] %}
@@ -582,6 +796,59 @@
                                     {% endif %}
                                 </td>
                                 <td><strong>{{ "%.3f"|format(c.score) }}</strong></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="card table-card">
+                    <div class="table-header">
+                        <h2>Recent Outcomes</h2>
+                        <div class="muted">Most recent pick evaluations</div>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Evaluated</th>
+                                <th>Ticker</th>
+                                <th>Horizon</th>
+                                <th>Bars</th>
+                                <th>Return</th>
+                                <th>Target</th>
+                                <th>Stop</th>
+                                <th>Notes</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for o in data.recent_outcomes %}
+                            <tr>
+                                <td>{{ o.evaluated_at_utc }}</td>
+                                <td><strong>{{ o.ticker }}</strong></td>
+                                <td>{{ o.horizon_days }}d</td>
+                                <td>{{ o.bars_available }}</td>
+                                <td>
+                                    {% if o.outcome_return_pct is not none %}
+                                        {{ "%.2f"|format(o.outcome_return_pct) }}%
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if o.hit_target %}
+                                        <span class="pill good">Yes</span>
+                                    {% else %}
+                                        <span class="pill neutral">No</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if o.hit_stop %}
+                                        <span class="pill bad">Yes</span>
+                                    {% else %}
+                                        <span class="pill neutral">No</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ o.notes or "-" }}</td>
                             </tr>
                             {% endfor %}
                         </tbody>

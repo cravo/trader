@@ -1,13 +1,20 @@
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timezone
 
 from .config import Settings
-from .market_data import download_price_history
+from .market_data import download_price_history, extract_ticker_frame
 from .notifier import send_no_trade_webhook, send_trade_webhook
 from .scoring import score_candidates
-from .storage import save_pick, save_scan_run, save_scan_candidates
-from .trade_rules import TradeDecision, choose_trade
+from .storage import (
+    list_picks,
+    save_pick,
+    save_pick_outcome,
+    save_scan_candidates,
+    save_scan_run,
+)
+from .trade_rules import choose_trade
 from .universe import build_universe
 
 
@@ -52,7 +59,168 @@ def build_parser() -> argparse.ArgumentParser:
     pick_parser.add_argument("--dry-run", action="store_true", help="Do not persist or notify")
     pick_parser.add_argument("--top", type=int, default=10, help="Number of top candidates to print")
 
+    evaluate_parser = subparsers.add_parser("evaluate", help="Evaluate outcomes for stored picks")
+    evaluate_parser.add_argument(
+        "--horizons",
+        type=str,
+        default="5,10",
+        help="Comma-separated forward trading day horizons (e.g. 5,10)",
+    )
+    evaluate_parser.add_argument(
+        "--limit",
+        type=int,
+        default=200,
+        help="Maximum number of recent picks to evaluate",
+    )
+
     return parser
+
+
+def parse_horizons(value: str) -> list[int]:
+    parts = [p.strip() for p in value.split(",") if p.strip()]
+    if not parts:
+        raise ValueError("No horizons supplied")
+
+    horizons = sorted({int(p) for p in parts})
+    if any(h <= 0 for h in horizons):
+        raise ValueError("Horizons must be positive integers")
+
+    return horizons
+
+
+def run_evaluate(args: argparse.Namespace) -> int:
+    settings = Settings()
+
+    try:
+        horizons = parse_horizons(args.horizons)
+    except ValueError as exc:
+        print(f"Invalid --horizons value: {exc}")
+        return 2
+
+    picks = list_picks(settings.database_path, limit=args.limit)
+    if not picks:
+        print("No picks found to evaluate.")
+        return 0
+
+    tickers = sorted({str(p["ticker"]).strip() for p in picks if str(p["ticker"]).strip()})
+    print(f"Loaded {len(picks)} picks across {len(tickers)} tickers.")
+    print("Downloading history for evaluation (2y lookback)...")
+    history = download_price_history(tickers, period="2y")
+
+    summary: dict[int, dict[str, float]] = {
+        h: {
+            "evaluated": 0.0,
+            "hit_target": 0.0,
+            "hit_stop": 0.0,
+            "avg_return_sum": 0.0,
+        }
+        for h in horizons
+    }
+
+    for pick in picks:
+        ticker = str(pick["ticker"])
+        frame = extract_ticker_frame(history, ticker)
+        pick_dt = datetime.fromisoformat(str(pick["picked_at_utc"]))
+        pick_date = (
+            pick_dt.replace(tzinfo=timezone.utc).date()
+            if pick_dt.tzinfo is None
+            else pick_dt.astimezone(timezone.utc).date()
+        )
+
+        if frame.empty or "Close" not in frame.columns:
+            for horizon in horizons:
+                save_pick_outcome(
+                    database_path=settings.database_path,
+                    pick_id=int(pick["id"]),
+                    horizon_days=horizon,
+                    bars_available=0,
+                    outcome_close=None,
+                    outcome_return_pct=None,
+                    max_favorable_pct=None,
+                    max_adverse_pct=None,
+                    hit_target=False,
+                    hit_stop=False,
+                    notes="no price frame",
+                )
+            continue
+
+        frame = frame.sort_index()
+        future = frame[frame.index.date > pick_date]
+
+        for horizon in horizons:
+            bars = future.head(horizon)
+            bars_available = len(bars)
+
+            if bars_available == 0:
+                save_pick_outcome(
+                    database_path=settings.database_path,
+                    pick_id=int(pick["id"]),
+                    horizon_days=horizon,
+                    bars_available=0,
+                    outcome_close=None,
+                    outcome_return_pct=None,
+                    max_favorable_pct=None,
+                    max_adverse_pct=None,
+                    hit_target=False,
+                    hit_stop=False,
+                    notes="no forward bars",
+                )
+                continue
+
+            entry = float(pick["latest_close"])
+            target = float(pick["target_price"])
+            stop = float(pick["stop_price"])
+
+            last_close = float(bars["Close"].iloc[-1])
+            high_max = float((bars["High"] if "High" in bars.columns else bars["Close"]).max())
+            low_min = float((bars["Low"] if "Low" in bars.columns else bars["Close"]).min())
+
+            outcome_return_pct = ((last_close / entry) - 1.0) * 100.0
+            max_favorable_pct = ((high_max / entry) - 1.0) * 100.0
+            max_adverse_pct = ((low_min / entry) - 1.0) * 100.0
+            hit_target = high_max >= target
+            hit_stop = low_min <= stop
+            notes = None if bars_available >= horizon else f"only {bars_available}/{horizon} bars"
+
+            save_pick_outcome(
+                database_path=settings.database_path,
+                pick_id=int(pick["id"]),
+                horizon_days=horizon,
+                bars_available=bars_available,
+                outcome_close=last_close,
+                outcome_return_pct=outcome_return_pct,
+                max_favorable_pct=max_favorable_pct,
+                max_adverse_pct=max_adverse_pct,
+                hit_target=hit_target,
+                hit_stop=hit_stop,
+                notes=notes,
+            )
+
+            summary_row = summary[horizon]
+            summary_row["evaluated"] += 1
+            summary_row["hit_target"] += 1 if hit_target else 0
+            summary_row["hit_stop"] += 1 if hit_stop else 0
+            summary_row["avg_return_sum"] += outcome_return_pct
+
+    print("\nOutcome summary:")
+    for horizon in horizons:
+        row = summary[horizon]
+        evaluated = int(row["evaluated"])
+        if evaluated == 0:
+            print(f"- {horizon}d: no evaluated picks")
+            continue
+
+        hit_target_pct = (row["hit_target"] / evaluated) * 100.0
+        hit_stop_pct = (row["hit_stop"] / evaluated) * 100.0
+        avg_return = row["avg_return_sum"] / evaluated
+        print(
+            f"- {horizon}d: evaluated={evaluated}, "
+            f"target_hit={hit_target_pct:.1f}%, "
+            f"stop_hit={hit_stop_pct:.1f}%, "
+            f"avg_return={avg_return:.2f}%"
+        )
+
+    return 0
 
 
 def print_top_candidates(candidates, top_n: int) -> None:
@@ -243,6 +411,9 @@ def main() -> int:
 
     if args.command == "pick":
         return run_pick(args)
+
+    if args.command == "evaluate":
+        return run_evaluate(args)
 
     parser.print_help()
     return 1
