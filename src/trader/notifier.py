@@ -1,18 +1,26 @@
 from __future__ import annotations
 
+from typing import Iterable
+
 import requests
 
 from .config import Settings
 from .scoring import ScoredCandidate
 
 
-def build_trade_webhook_payload(candidate, top_candidates, settings):
+def build_trade_webhook_payload(
+    candidate: ScoredCandidate,
+    top_candidates: Iterable[ScoredCandidate],
+    settings: Settings,
+    target_price: float,
+    stop_price: float,
+) -> dict:
 
     currency_symbol = "$" if candidate.market == "US" else "£"
 
     buy_price = candidate.latest_close
-    target_price = buy_price * (1 + settings.target_profit_pct / 100)
-    stop_price = buy_price - (1.5 * candidate.atr_value)
+
+    top_candidates = list(top_candidates)
 
     leaderboard = "\n".join(
         [
@@ -51,13 +59,26 @@ def build_no_trade_webhook_payload(reason: str, settings: Settings) -> dict:
     }
 
 
-def send_trade_webhook(candidate: ScoredCandidate, settings: Settings, timeout_seconds: int = 15) -> None:
+def send_trade_webhook(
+    candidate: ScoredCandidate,
+    top_candidates: Iterable[ScoredCandidate],
+    settings: Settings,
+    target_price: float,
+    stop_price: float,
+    timeout_seconds: int = 15,
+) -> None:
     print("Sending trade webhook notification...")
 
     if not settings.webhook_url:
         raise RuntimeError("WEBHOOK_URL is not configured")
 
-    payload = build_trade_webhook_payload(candidate, settings)
+    payload = build_trade_webhook_payload(
+        candidate=candidate,
+        top_candidates=top_candidates,
+        settings=settings,
+        target_price=target_price,
+        stop_price=stop_price,
+    )
     response = requests.post(settings.webhook_url, json=payload, timeout=timeout_seconds)
     response.raise_for_status()
 

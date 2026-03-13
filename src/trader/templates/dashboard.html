@@ -376,10 +376,14 @@
                     <div class="muted">Last scan: {{ data.run.run_at_utc }}</div>
                 </div>
 
-                {% if data.run.regime_bullish %}
+                {% if data.run.regime_state == "bullish" %}
                     <span class="badge good">Market regime bullish</span>
-                {% else %}
+                {% elif data.run.regime_state == "neutral" %}
+                    <span class="badge warn">Market regime neutral</span>
+                {% elif data.run.regime_state == "bearish" %}
                     <span class="badge bad">Market regime bearish</span>
+                {% else %}
+                    <span class="badge warn">Market regime unknown</span>
                 {% endif %}
             </div>
 
@@ -392,14 +396,18 @@
                                 {{ data.run.regime_ticker }}
                             </div>
                             <div class="regime-sub">
-                                Compared with {{ data.run.regime_ma_days }}-day moving average
+                                Fast MA {{ data.run.regime_ma_days }}d / Slow MA {{ data.run.regime_ma_slow_days }}d
                             </div>
                         </div>
 
-                        {% if data.run.regime_bullish %}
+                        {% if data.run.regime_state == "bullish" %}
                             <span class="badge good">Risk-on</span>
+                        {% elif data.run.regime_state == "neutral" %}
+                            <span class="badge warn">Selective</span>
+                        {% elif data.run.regime_state == "bearish" %}
+                            <span class="badge bad">Defensive</span>
                         {% else %}
-                            <span class="badge bad">Stand down</span>
+                            <span class="badge warn">Unknown</span>
                         {% endif %}
                     </div>
 
@@ -409,13 +417,13 @@
                             <div class="metric-value">{{ "%.2f"|format(data.run.regime_latest or 0) }}</div>
                         </div>
                         <div class="metric">
-                            <div class="metric-label">Moving Avg</div>
+                            <div class="metric-label">Fast MA</div>
                             <div class="metric-value">{{ "%.2f"|format(data.run.regime_ma or 0) }}</div>
                         </div>
                         <div class="metric">
-                            <div class="metric-label">Delta</div>
+                            <div class="metric-label">Slow MA</div>
                             <div class="metric-value">
-                                {{ "%.2f"|format((data.run.regime_latest or 0) - (data.run.regime_ma or 0)) }}
+                                {{ "%.2f"|format(data.run.regime_ma_slow or 0) }}
                             </div>
                         </div>
                     </div>

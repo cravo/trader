@@ -90,6 +90,13 @@ def load_dashboard_data() -> dict:
     run_dict["is_stale"] = age > timedelta(hours=36)
     run_dict["age_seconds"] = int(age.total_seconds())
 
+    # Backward-compatible display fields for the dashboard template.
+    run_dict["regime_latest"] = run_dict.get("regime_price")
+    run_dict["regime_ma"] = run_dict.get("regime_ma_fast")
+    run_dict["regime_ma_days"] = settings.market_regime_fast_ma
+    run_dict["regime_ma_slow_days"] = settings.market_regime_slow_ma
+    run_dict["regime_bullish"] = run_dict.get("regime_state") == "bullish"
+
     return {
         "run": run_dict,
         "candidates": [dict(row) for row in candidates],

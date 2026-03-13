@@ -127,7 +127,7 @@ def score_candidates(
         if frame.empty:
             continue
 
-        required_cols = {"Close", "High", "Volume"}
+        required_cols = {"Close", "High", "Low", "Volume"}
         if not required_cols.issubset(set(frame.columns)):
             continue
 
@@ -135,6 +135,20 @@ def score_candidates(
         high_series = frame["High"].dropna()
         volume_series = frame["Volume"].dropna()
         low_series = frame["Low"].dropna()
+
+        min_needed = max(
+            31,
+            settings.breakout_lookback_days + 1,
+            settings.trend_slow_ma_days,
+            20,
+        )
+        if (
+            len(close_series) < min_needed
+            or len(high_series) < min_needed
+            or len(low_series) < min_needed
+            or len(volume_series) < min_needed
+        ):
+            continue
 
         avg_20d_close = float(close_series.iloc[-20:].mean())
         avg_20d_volume = float(volume_series.iloc[-20:].mean())
@@ -161,14 +175,6 @@ def score_candidates(
         high_20 = high_series.rolling(20).max().iloc[-1]
 
         if high_20 <= 0:
-            continue
-
-        min_needed = max(
-            31,
-            settings.breakout_lookback_days + 1,
-            settings.trend_slow_ma_days,
-        )
-        if len(close_series) < min_needed or len(high_series) < settings.breakout_lookback_days + 1 or len(volume_series) < 31:
             continue
 
         latest_close = float(close_series.iloc[-1])

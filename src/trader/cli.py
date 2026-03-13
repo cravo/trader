@@ -91,6 +91,7 @@ def run_pick(args: argparse.Namespace) -> int:
     benchmarks = [
         settings.uk_benchmark_ticker,
         settings.us_benchmark_ticker,
+        settings.market_regime_ticker,
     ]
     all_tickers = list(dict.fromkeys(tickers + benchmarks))
 
@@ -135,11 +136,15 @@ def run_pick(args: argparse.Namespace) -> int:
             f"{settings.rs_universe_percent:.0f}% ({rs_keep_count} of {len(candidates)}) by RS"
         )
 
+    effective_regime_state = regime_state if settings.market_regime_filter else "bullish"
+    if not settings.market_regime_filter:
+        print("Market regime filter disabled: applying bullish thresholds for trade selection.")
+
     decision = choose_trade(
         history=history,
         candidates=candidates,
         settings=settings,
-        regime_state=regime_state,
+        regime_state=effective_regime_state,
     )
 
     dry_run = args.dry_run or settings.dry_run
@@ -162,7 +167,7 @@ def run_pick(args: argparse.Namespace) -> int:
             database_path=settings.database_path,
             scan_id=scan_id,
             candidates=candidates,
-            limit=10,
+            limit=settings.max_candidates,
         )
         print(f"Saved scan run and candidates to SQLite with scan_id={scan_id}.")
 
@@ -220,7 +225,13 @@ def run_pick(args: argparse.Namespace) -> int:
     print("Saved pick to SQLite.")
 
     if args.notify:
-        send_trade_webhook(winner, candidates, settings)
+        send_trade_webhook(
+            candidate=winner,
+            top_candidates=candidates,
+            settings=settings,
+            target_price=target_price,
+            stop_price=stop_price,
+        )
         print("Trade webhook notification sent.")
 
     return 0
