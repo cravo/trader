@@ -1,5 +1,7 @@
 # Trader
 
+[![Tests](https://github.com/cravo/trader/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/cravo/trader/actions/workflows/tests.yml)
+
 A small Python app to recommend swing trades, based on a one-week time horizon and 5% gain:
 
 - downloads market data from Yahoo Finance
